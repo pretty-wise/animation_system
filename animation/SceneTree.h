@@ -1,0 +1,236 @@
+#pragma once
+
+#include "engine/core/Types.h"
+#include "engine/math/Vec3.h"
+#include "engine/math/Matrix4x4.h"
+#include "engine/math/Quaternion.h"
+#include "engine/core/ObjectArray.h"
+
+//---------------------------------------------------------------------------------------
+namespace Engine{
+//---------------------------------------------------------------------------------------
+/*
+
+Problem:
+
+partial animation (remapping)
+node search.
+
+for( anim_control in controllers )
+{
+	Scene& scene = anim_control->GetScene();
+	
+	if( scene.Exists( anim_control->GetRootHandle() ) )
+	{
+		Node& root = scene.Lookup( anim_control->GetRootHandle() );
+		
+		for( u32 index = 0; index < scene.GetChildCount( root ); ++index )
+		{
+			AnimationClip::JointPose pose;
+			anim_control->GetJointPose(index, pose);
+		
+			Node& scene_node = scene.GetChildNode( root, index );
+			
+			scene_node.SetTranslation( pose.translation );
+			scene_node.SetRotation( pose.rotation );
+			scene_node.SetScale( pose.scale );
+		}
+	}
+}
+
+	*
+ *     *
+* *  *   *
+	 *  * *
+	
+*/
+//---------------------------------------------------------------------------------------
+
+class SceneTree
+{
+private:
+	static const u32 MaxNodeCount = 500;
+
+	class Node : public IObject
+	{
+	public:
+		friend class SceneTree;
+
+		typedef u32 Index;
+		static const Index InvalidIndex = -1;
+
+		//! Constructor.
+		Node();
+
+		//! Destructor.
+		~Node();
+
+		//! Returns local translation vector.
+		inline const Vec3& GetLocalTranslation() const { return m_translation; }
+
+		//! Returns local uniform scale.
+		inline float GetLocalScale() const { return m_scale; }
+
+		//! Returns local rotation quaternion.
+		inline const Quaternion& GetLocalRotation() const { return m_rotation; }
+
+		//! Returns local transformation matrix. Valid after CalculateLocalTransformations call.
+		inline const Matrix4x4& GetLocalMatrix() const { return m_local; }
+
+		//! Retruns world transformation matrix. Valid after CalculateWorldTransformations call.
+		inline const Matrix4x4& GetWorldMatrix() const { return m_world; }
+
+	private:
+		//! Node's local translation.
+		Vec3 m_translation;
+		
+		//! Node's local uniform scale.
+		float m_scale;
+		
+		//! Node's local rotation.
+		Quaternion m_rotation;
+		
+		//! Node's local transformation.
+		Matrix4x4 m_local;
+		
+		//! Node's world transformation.
+		Matrix4x4 m_world;
+			
+	
+	private:
+		//! Node's parent index.
+		Index m_parent;
+		
+		//! Node's sibling index.
+		Index m_next;
+		
+		//! Node's child index.
+		Index m_child;
+	};
+	
+	Node& Lookup( Handle handle );
+	const Node& Lookup( Handle handle ) const;
+
+public:
+	//! Constructor.
+	SceneTree();
+
+	//! Destructor.
+	~SceneTree();
+
+	//! Adds a root node.
+	Handle Add();
+
+	//! Invalidates node refferences!
+	Handle AddChild( Handle parent );
+
+	//! Removes a node with all children(?).
+	void Remove( Handle handle );
+	
+	//! Checks if node has a parent.
+	bool HasParent( Handle handle );
+	
+	//! Retrieves a parent node. Remember to use HasParent first!
+	Handle GetParent( Handle child );
+	
+	//! Checks if node has a next sibling.
+	bool HasNext( Handle node );
+	
+	//! Gets node's next sibling. Remember to use HasNext first!
+	Handle GetNext( Handle node );
+	
+	//! Checks if node has a child node.
+	bool HasChildren( Handle node );
+	
+	//! Retrieves node's child. Remember to use HasChildren first!
+	Handle GetFirstChild( Handle parent );
+	
+	//! Returns number of children.
+	u32 GetChildCount( Handle root ) const;
+
+	//! Number of nodes in the whole subtree.
+	u32 GetOffspringCount( Handle root ) const;
+	
+	//! Returns node in the tree below root node.
+	Handle GetChildNode( Handle root, u32 index );
+
+	//! Total node count in tree.
+	inline u32 GetNodeCount() const { return m_uCurrentCount; }
+
+	void print() const;
+
+public:
+	//! Node's local translation getter.
+	const Vec3& GetLocalTranslation( Handle node ) const;
+
+	//! Returns node's local scale.
+	float GetLocalScale( Handle node ) const;
+
+	//! Returns node's local rotation.
+	const Quaternion& GetLocalRotation( Handle node ) const;
+	
+public:
+	//! Calculates node's local transformation matrices based on translation-scale-rotation data.
+	void CalculateLocalTransformations();
+	
+	//! Calculates node's global transformation matrices based on local tranformation matrices.
+	void CalculateWorldTransformations();
+	
+private:
+	struct Index
+	{
+		Handle id;
+		u32 index;
+		u32 next;
+	};
+
+	//! Current node count.
+	u32 m_uCurrentCount;
+
+	//! Scene nodes.
+	Node m_aNode[ SceneTree::MaxNodeCount ];
+
+	//! Index array.
+	Index m_aIndex[ SceneTree::MaxNodeCount ];
+
+	//!
+	u32 m_uFirstFreeIndex;
+
+	//!
+	u32 m_uLastFreeIndex;
+};
+
+//---------------------------------------------------------------------------------------
+} // namespace Engine
+//---------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

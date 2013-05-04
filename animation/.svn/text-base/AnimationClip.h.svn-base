@@ -1,0 +1,258 @@
+#pragma once
+
+#include "engine\StringId.h"
+#include "engine\Quaternion.h"
+#include "engine\Vec3.h"
+#include "engine\IAsset.h"
+
+//---------------------------------------------------------------------------------------
+namespace Engine{
+namespace Animation{
+//---------------------------------------------------------------------------------------
+
+/*
+* GLOBAL ANIMATION TIMELINE
+
+ T - global time
+ Tstart - global time start
+ R - playback rate (i.e. 1 = normal speed, 2 = twice the normal speed)
+ D - animation duration
+ N - number of loops
+ t - local anim time
+
+* getting local animation time from global time
+ t = R(T - Tstart)
+* getting global time from animations local time
+ T = Tstart + (1/R)t
+
+* if animation is played once (N = 0):
+ t = clamp(t = R(T - Tstart), 0, D).
+* if animation loops forever (N = infinity)
+ t = (R(T - Tstart)) mod D.
+* if animation is looed finite number of times ( 1 < N < inf )
+ t = clamp(R(T - Tstart), 0, N*D) mod D.
+*/
+	
+//---------------------------------------------------------------------------------------
+/*
+class AnimationClip : public IAsset
+{
+	DECLARE_RTTI;
+
+public:
+
+	//! IAsset constructor.
+	AnimationClip(const char* filename);
+
+	//! Destructor.
+	~AnimationClip();
+
+	//---------------------------------------------------------------------------------------
+
+	// joint poses stored in TQS format (not in matrix) becouse matrix blending is inefficient.
+	// uniform scale is used to reduce amount memory needed to store AnimationClips.
+	// each JointPose stores local joint pose what enables us to blend different AnimationClips.
+	struct JointPose
+	{
+		inline JointPose& operator*=(const JointPose& rhs);
+		JointPose();
+		inline JointPose(const JointPose& p);
+		inline JointPose operator*(const JointPose& rhs);
+		inline void toMatrix(Matrix4x4& out);
+
+		Quaternion		rotation;
+		Vec3			translation;
+		float			scale; // uniform scale.
+	};
+
+	class AnimationPose
+	{
+	public:
+		AnimationPose() : m_aJointPoses(NULL){}
+		~AnimationPose() { delete [] m_aJointPoses; }
+
+		inline const JointPose& getJointPose(s16 remappedJointIdx) const { return m_aJointPoses[remappedJointIdx]; }
+	
+		JointPose*		m_aJointPoses;
+	private:
+	};
+	
+	//---------------------------------------------------------------------------------------
+	
+
+	bool						load(s8* data, streamsize length);
+	void						unload();
+
+	// animations name.
+	inline StringId getName() const;
+
+	// bound skeleton's name.
+	inline StringId				getSkeletonName() const;
+
+	// returns duration of the animation in milliseconds.
+	inline float				getDuration() const;
+
+	// returns joint pose in between frames for specified joint index. JointPose is inTQS format for further blending.
+	inline void					getJointPose(float localTimeMs, s16 jointIdx, JointPose& outPose) const;
+	
+	inline bool					hasJointPose(s16 jointIdx) const { return m_aJointRemap[jointIdx] != -1; }
+
+	AnimationClip&				operator-=(const AnimationClip& rhs);
+
+	void _serialize(std::string& output);
+
+private:
+
+	//! Returns sample time i.e. 3.3 - frame between frame 3 and frame 4. Used to get blended in between joint pose.
+	inline float getSampleTime(float localTimeMs) const;
+
+	//! Name of the animation. Needed? Deprecated?
+	StringId m_animationName;
+
+	//! Animation skeleton name. Deprecated?
+	StringId m_skeletonId;
+
+	//! Number of skeleton joints. Deprecated?
+	u32 m_jointCount;
+
+	//! Frames per second * 0.001f. Milliseconds used to avoid float precision errors. animation durationMs = m_frameCount / m_framesPerMs.
+	float m_framesPerMs;
+
+	//! Number of baked frames.
+	u32 m_frameCount;
+
+	//! Baked animation poses.
+	AnimationPose* m_aAnimationSamples;
+
+	//! Joint remap array. Stores actual index of joint data. -1 if joint doesn't participate in this animation.
+	s16* m_aJointRemap;
+};
+
+//---------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------
+
+		inline AnimationClip::JointPose& AnimationClip::JointPose::operator*=(const AnimationClip::JointPose& rhs)
+		{
+			translation.x *= rhs.scale;
+			translation.y *= rhs.scale;
+			translation.z *= rhs.scale;
+
+			translation = rhs.rotation * translation + rhs.translation;
+
+			scale *= rhs.scale;
+
+			rotation = rhs.rotation * rotation;
+			return *this;
+		}
+
+		AnimationClip::JointPose::JointPose(){}
+
+		inline AnimationClip::JointPose::JointPose(const AnimationClip::JointPose& p)
+		{
+			translation = p.translation;
+			rotation = p.rotation;
+			scale = p.scale;
+		}
+
+		inline AnimationClip::JointPose AnimationClip::JointPose::operator*(const AnimationClip::JointPose& rhs)
+		{
+			JointPose p(*this);
+			p *= rhs;
+			return p;
+		}
+
+		inline void AnimationClip::JointPose::toMatrix(Matrix4x4& out)
+		{
+			out.makeScale(scale, scale, scale);
+
+			Matrix4x4 rot;
+			rotation.toMatrix(rot);
+
+
+			out *= rot;
+
+			out.matrix[12] = translation.x;
+			out.matrix[13] = translation.y;
+			out.matrix[14] = translation.z;
+		}
+
+//---------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------
+
+typedef shared_ptr<AnimationClip> AnimationClipPtr;
+
+
+inline
+StringId AnimationClip::getName() const
+{
+	return m_animationName;
+}
+
+//---------------------------------------------------------------------------------------
+
+inline StringId AnimationClip::getSkeletonName() const
+{
+	return m_skeletonId;
+}
+
+//---------------------------------------------------------------------------------------
+
+inline
+float AnimationClip::getDuration() const
+{
+	//return m_frameCount / m_framesPerSecond * 1000.f;
+	return m_frameCount / m_framesPerMs;
+}
+
+//---------------------------------------------------------------------------------------
+
+inline
+float AnimationClip::getSampleTime(float localTimeMs) const
+{
+	float sample = localTimeMs * m_framesPerMs;
+	return sample;
+}
+
+//---------------------------------------------------------------------------------------
+
+inline
+void AnimationClip::getJointPose(float localTimeMs, s16 jointIdx, JointPose& outPose) const
+{
+	ENGINE_ASSERT(hasJointPose(jointIdx), "");
+
+	s16 realJointIdx = m_aJointRemap[jointIdx];
+
+	float sampleTime = getSampleTime(localTimeMs);
+	
+	// blended samples.
+	int lowerSample = (int)Math::floor<float>(sampleTime);
+	int upperSample = (int)Math::ceil<float>(sampleTime);
+
+	if(lowerSample == m_frameCount)
+	{
+		float duration = getDuration();
+		u32 a = 3;
+		// nie moze byc tego hacka bo potem sampleTime jest np. 40, lower sample jest 0 i factor = 40 - 0 a factor musi byc <0,1>
+		//lowerSample = 0; // ?? to jakis nasty hack. sprawdzic jak to jest we freshu.
+	}
+
+	// out of range. for looped clip - blend last frame with the first one.
+	if(upperSample == m_frameCount)
+	{
+		upperSample = 0; //TODO dla loopowanej = 0. dla nieloopowanej powinno byc = lowerSample
+	}
+
+	// blend factor.
+	float factor = sampleTime - (float)lowerSample;
+
+
+	// sample blending.
+	outPose.translation = Vec3::LERP(m_aAnimationSamples[lowerSample].getJointPose(realJointIdx).translation, m_aAnimationSamples[upperSample].getJointPose(realJointIdx).translation, factor);
+	outPose.rotation = Quaternion::SLERP(m_aAnimationSamples[lowerSample].getJointPose(realJointIdx).rotation, m_aAnimationSamples[upperSample].getJointPose(realJointIdx).rotation, factor);
+	outPose.scale = Math::lerp(m_aAnimationSamples[lowerSample].getJointPose(realJointIdx).scale, m_aAnimationSamples[upperSample].getJointPose(realJointIdx).scale, factor);
+}
+*/
+//---------------------------------------------------------------------------------------
+} // namespace Animation
+} // namespace Engine
+//---------------------------------------------------------------------------------------

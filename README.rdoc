@@ -1,0 +1,9 @@
+== Animation System
+
+This is an excerpt from my Master's thesis: "Animation Control System for Interactive Articulated Objects". It's an implementation of skeletal animation system which includes many useful features, such as:
+* additive animation blending
+* partial skeleton blending
+* independent animation layers
+* cross-fading
+* data-driven blend trees
+* data-driven animation states and named transitions
