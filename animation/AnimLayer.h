@@ -51,7 +51,7 @@ public:
     
     void Stop();
     
-    inline bool Active() { return m_current_tree != nullptr; }
+    inline bool Active() { return m_current_tree.IsValid(); }
     
     bool Paused() const { return m_paused; }
     
@@ -71,10 +71,10 @@ public:
     
     inline void SetBlendFactor( float f ) { m_blend_factor = f; }
     
-    inline void SetStateData( AnimStates* data ) { m_state_data = data; }
+    void SetStateData( AnimStates* data );
     
 private:
-    bool Play( AnimBlendNode* tree, float blend_ms );
+    bool Play( const AnimBlendTree& tree, float blend_ms, float start_time_ms );
     
 private:
     // layer state and transition data.
@@ -90,10 +90,10 @@ private:
     bool m_paused;
     
     // root node of animation blend tree.
-    AnimBlendNode* m_current_tree;
+    AnimBlendTree m_current_tree;
     
     // used while cross-blending.
-    AnimBlendNode* m_previous_tree;
+    AnimBlendTree m_previous_tree;
     
 private:
     // type of layer, used while blending layers.

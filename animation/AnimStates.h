@@ -48,8 +48,7 @@ public:
         
         const Transition* FindTransition( StringId name ) const;
         
-        // creates animation tree. all animations start at current_tims_ms.
-        AnimBlendNode* CopyBlendTree( float current_tims_ms ) const;
+        const AnimBlendTree& GetBlendTree() const;
         
         friend class AnimStates;
     private:
@@ -63,7 +62,7 @@ public:
         u16 m_num_transitions;
         
         // states animation tree.
-        AnimBlendNode* m_tree;
+        AnimBlendTree m_tree;
     };
     
 public:
@@ -75,6 +74,9 @@ public:
     ~AnimStates();
     
     const State* FindState( StringId name ) const;
+    
+    // returns maximum size of a blend tree (number of nodes) in any state.
+    u16 GetMaxNodeCount() const;
     
 private:
     // all state transitions. refferenced from state objects.

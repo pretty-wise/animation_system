@@ -7,8 +7,6 @@ namespace Engine{
 
 AnimLayer::AnimLayer()
 : m_state_data(nullptr)
-, m_current_tree(nullptr)
-, m_previous_tree(nullptr)
 , m_paused(false)
 , m_global_clock(0.f)
 , m_type(LayerType::Lerp)
@@ -22,10 +20,22 @@ AnimLayer::AnimLayer()
 
 AnimLayer::~AnimLayer()
 {
-    delete m_current_tree;
-    delete m_previous_tree;
 }
+    
+//---------------------------------------------------------------------------------------
 
+void AnimLayer::SetStateData( AnimStates* data )
+{
+    m_state_data = data;
+    
+    u16 max_node_count = 0;
+    if( data )
+        max_node_count = data->GetMaxNodeCount();
+
+    m_current_tree.Resize(max_node_count);
+    m_previous_tree.Resize(max_node_count);
+}
+    
 //---------------------------------------------------------------------------------------
 
 bool AnimLayer::Play( StringId state_name, float blend_ms )
@@ -38,12 +48,12 @@ bool AnimLayer::Play( StringId state_name, float blend_ms )
     if( !state )
         return false;
     
-    AnimBlendNode* tree = state->CopyBlendTree( m_global_clock );
+    const AnimBlendTree& tree = state->GetBlendTree();
     
-    if( !tree )
+    if( !tree.IsValid() )
         return false;
     
-    bool res = Play( tree, blend_ms );
+    bool res = Play( tree, blend_ms, m_global_clock );
     
     if( res )
         m_current_state = state_name;
@@ -75,15 +85,15 @@ bool AnimLayer::Transition( StringId transition_name )
     
     if( transition->IsSynced() )
     {
-        start_time = m_global_clock - m_current_tree->GetLocalAnimationTime( m_global_clock );
+        start_time = m_global_clock - m_current_tree.GetLocalAnimationTime( m_global_clock );
     }
     
-    AnimBlendNode* tree = destination->CopyBlendTree( start_time );
+    const AnimBlendTree& tree = destination->GetBlendTree();
     
-    if( !tree )
+    if( !tree.IsValid() )
         return false;
     
-    bool res = Play( tree, transition->GetBlendTime()  );
+    bool res = Play( tree, transition->GetBlendTime(), start_time );
     
     if( res )
         m_current_state = destination->GetName();
@@ -93,16 +103,14 @@ bool AnimLayer::Transition( StringId transition_name )
 
 //---------------------------------------------------------------------------------------
     
-bool AnimLayer::Play( AnimBlendNode* tree, float blend_ms )
+bool AnimLayer::Play( const AnimBlendTree& tree, float blend_ms, float start_time_ms )
 {
-    ENGINE_ASSERT(tree, "null tree specified");
+    ENGINE_ASSERT(tree.IsValid(), "invalid tree specified");
     
-    // todo: support blend
-    
-    if( blend_ms > 0.f && m_current_tree )
+    if( blend_ms > 0.f && m_current_tree.IsValid() )
     {
-        if( m_previous_tree )
-            delete m_previous_tree;
+        if( m_previous_tree.IsValid() )
+            m_previous_tree.Clear();
         
         // todo: more blend types.
         m_crossfade_type = BlendType::Linear;
@@ -115,9 +123,11 @@ bool AnimLayer::Play( AnimBlendNode* tree, float blend_ms )
     }
     else
     {
-        delete m_current_tree;
+        m_current_tree.Clear();
         m_current_tree = tree;
     }
+    
+    m_current_tree.Start( start_time_ms );
     
     return true;
 }
@@ -126,15 +136,13 @@ bool AnimLayer::Play( AnimBlendNode* tree, float blend_ms )
     
 void AnimLayer::Stop()
 {
-    delete m_previous_tree;
-    m_previous_tree = nullptr;
+    m_previous_tree.Clear();
     
     m_crossfade_duration = 0.f;
     m_crossfade_timer = 0.f;
     m_crossfade_type = BlendType::None;
     
-    delete m_current_tree;
-    m_current_tree = nullptr;
+    m_current_tree.Clear();
 
     m_paused = false;
 }
@@ -143,16 +151,16 @@ void AnimLayer::Stop()
     
 bool AnimLayer::GetJointPose( u32 joint_idx, AnimationClip::JointPose& pose )
 {
-    bool res = m_current_tree->GetJointPose( m_global_clock, joint_idx, pose );
+    bool res = m_current_tree.GetJointPose( m_global_clock, joint_idx, pose );
     
-    if( res && m_previous_tree )
+    if( res && m_previous_tree.IsValid() )
     {
         // blend in factor (blend out should be 1.f - factor).
         float factor = m_crossfade_timer / m_crossfade_duration;
         
         // get previous animation tree pose.
         AnimationClip::JointPose previous_pose;
-        m_previous_tree->GetJointPose( m_global_clock, joint_idx, previous_pose);
+        m_previous_tree.GetJointPose( m_global_clock, joint_idx, previous_pose);
         
         // lerp with new pose.
         pose.MakeLerp(previous_pose, pose, factor);
@@ -179,8 +187,7 @@ void AnimLayer::Update( float fDeltaMs )
             {
                 // remove previous tree.
                 // glitch happens here if already blending with previous tree.
-                delete m_previous_tree;
-                m_previous_tree = nullptr;
+                m_previous_tree.Clear();
                 
                 // reset crossfade data.
                 m_crossfade_type = BlendType::None;
@@ -195,11 +202,11 @@ void AnimLayer::Update( float fDeltaMs )
         {
             m_global_clock -= max_clock_value;
             
-            if( m_current_tree )
-                m_current_tree->FixAnimationStartTime( max_clock_value );
+            if( m_current_tree.IsValid() )
+                m_current_tree.FixAnimationStartTime( max_clock_value );
             
-            if( m_previous_tree )
-                m_previous_tree->FixAnimationStartTime( max_clock_value );
+            if( m_previous_tree.IsValid() )
+                m_previous_tree.FixAnimationStartTime( max_clock_value );
         }
     }
 }
@@ -208,37 +215,14 @@ void AnimLayer::Update( float fDeltaMs )
 
 bool AnimLayer::SetNodeFactor( StringId name, float value )
 {
-    if( m_current_tree )
-    {
-        AnimBlendNode* node = m_current_tree->FindNode(name);
-        
-        if( node )
-        {
-            node->SetFactor(value);
-            return true;
-        }
-        
-    }
-    
-    return false;
+    return m_current_tree.SetNodeFactor( name, value );
 }
 
 //---------------------------------------------------------------------------------------
 
 bool AnimLayer::GetNodeFactor( StringId name, float& value ) const
 {
-    if( m_current_tree )
-    {
-        AnimBlendNode* node = m_current_tree->FindNode(name);
-        
-        if( node )
-        {
-            value = node->GetFactor();
-            return true;
-        }
-    }
-    
-    return false;
+    return m_current_tree.GetNodeFactor( name, value );
 }
 
 //---------------------------------------------------------------------------------------

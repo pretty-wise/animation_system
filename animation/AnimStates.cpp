@@ -14,7 +14,6 @@ AnimStates::State::State()
 : m_name(0)
 , m_transitions(nullptr)
 , m_num_transitions(0)
-, m_tree(nullptr)
 {
     
 }
@@ -23,7 +22,6 @@ AnimStates::State::State()
 
 AnimStates::State::~State()
 {
-    delete m_tree;
 }
     
 //---------------------------------------------------------------------------------------
@@ -42,15 +40,12 @@ const AnimStates::Transition* AnimStates::State::FindTransition( StringId name )
 }
     
 //---------------------------------------------------------------------------------------
-    
-AnimBlendNode* AnimStates::State::CopyBlendTree( float current_tims_ms ) const
-{
-    ENGINE_ASSERT(m_tree, "invalid tree");
-    
-    // todo: optimize memory allocation.
-    return new AnimBlendNode(*m_tree, current_tims_ms);
-}
 
+const AnimBlendTree& AnimStates::State::GetBlendTree() const
+{
+    return m_tree;
+}
+    
 //---------------------------------------------------------------------------------------
 // Transitions
 //---------------------------------------------------------------------------------------
@@ -87,11 +82,11 @@ AnimStates::~AnimStates()
 
 //---------------------------------------------------------------------------------------
 
-AnimBlendNode* read_blend_tree( rapidxml::xml_node<>* node )
+u16 read_blend_tree( AnimBlendTree& tree, rapidxml::xml_node<>* node )
 {
     const char* node_type = node->first_attribute("type") ? node->first_attribute("type")->value() : "";
     const char* node_value = node->value();
-    bool looped = true; // todo: read this.
+    bool looped = node->first_attribute("looped") ? !strcmp(node->first_attribute("looped")->value(), "true") : false;
     
     if( !strcmp(node_type, "clip") )
     {
@@ -104,7 +99,12 @@ AnimBlendNode* read_blend_tree( rapidxml::xml_node<>* node )
         {
             clip_data->FixPointers();
             
-            return new AnimBlendNode(clip_data, 0.f, looped, 1.f);
+            if( tree.GetCount()+1 > tree.GetCapacity() )
+                tree.Resize(tree.GetCount()+1);
+            
+            tree.m_nodes[tree.GetCount()] = AnimBlendTree::Node(clip_data, 0.f, looped, 1.f);
+            tree.m_node_count++;
+            return tree.GetCount()-1;
         }
     }
     else if( !strcmp(node_type, "additive") )
@@ -113,27 +113,58 @@ AnimBlendNode* read_blend_tree( rapidxml::xml_node<>* node )
         rapidxml::xml_node<>* rightxml = leftxml->next_sibling("node");
         
         const char* factor = node->first_attribute("factor-name") ? node->first_attribute("factor-name")->value() : "";
+        float factor_value = node->first_attribute("factor-value") ? atof( node->first_attribute("factor-value")->value() ) : 1.f;
         
         StringId factor_name = COMPUTE_SID(factor);
         
         if( leftxml && rightxml )
         {
-            AnimBlendNode* left_tree = read_blend_tree(leftxml);
-            AnimBlendNode* right_tree = read_blend_tree(rightxml);
+            u16 additive_index = tree.GetCount();
             
-            if( left_tree && right_tree )
-            {
-                return new AnimBlendNode(left_tree, right_tree, factor_name);
-            }
-            else
-            {
-                delete left_tree;
-                delete right_tree;
-            }
+            if( tree.GetCount()+1 > tree.GetCapacity() )
+                tree.Resize(tree.GetCount()+1);
+            
+            tree.m_node_count++;
+            
+            u16 left_index = read_blend_tree(tree, leftxml);
+            u16 right_index = read_blend_tree(tree, rightxml);
+            
+            ENGINE_ASSERT(left_index != (u16)-1 && right_index != (u16)-1, "invalid tree");
+            
+            tree.m_nodes[additive_index] = AnimBlendTree::Node(BlendNodeType::Additive, left_index, right_index, factor_name, factor_value);
+            return additive_index;
+        }
+    }
+    else if( !strcmp(node_type, "lerp") )
+    {
+        rapidxml::xml_node<>* leftxml = node->first_node("node");
+        rapidxml::xml_node<>* rightxml = leftxml->next_sibling("node");
+        
+        const char* factor = node->first_attribute("factor-name") ? node->first_attribute("factor-name")->value() : "";
+        float factor_value = node->first_attribute("factor-value") ? atof( node->first_attribute("factor-value")->value() ) : 0.5f;
+        
+        StringId factor_name = COMPUTE_SID(factor);
+        
+        if( leftxml && rightxml )
+        {
+            u16 lerp_index = tree.GetCount();
+            
+            if( tree.GetCount()+1 > tree.GetCapacity() )
+                tree.Resize(tree.GetCount()+1);
+            
+            tree.m_node_count++;
+            
+            u16 left_index = read_blend_tree(tree, leftxml);
+            u16 right_index = read_blend_tree(tree, rightxml);
+            
+            ENGINE_ASSERT(left_index != (u16)-1 && right_index != (u16)-1, "invalid tree");
+            
+            tree.m_nodes[lerp_index] = AnimBlendTree::Node(BlendNodeType::Lerp, left_index, right_index, factor_name, factor_value);
+            return lerp_index;
         }
     }
     
-    return nullptr;
+    return -1;
 }
     
 //---------------------------------------------------------------------------------------
@@ -200,7 +231,7 @@ AnimStates* AnimStates::CreatFromData( s8* data, streamsize length )
             
             state.m_name = COMPUTE_SID( state_node->first_attribute("name")->value() );
             
-            state.m_tree = read_blend_tree( state_node->first_node("node") );
+            read_blend_tree(state.m_tree, state_node->first_node("node"));
             
             cur_state_idx++;
             state_node = state_node->next_sibling("state");
@@ -269,6 +300,22 @@ const AnimStates::State* AnimStates::FindState( StringId name ) const
     }
     
     return nullptr;
+}
+    
+//---------------------------------------------------------------------------------------
+    
+u16 AnimStates::GetMaxNodeCount() const
+{
+    u16 max = 0;
+    for( u16 i = 0; i < m_num_states; ++i )
+    {
+        u16 state_node_count = m_states[i].GetBlendTree().GetCount();
+        
+        if( state_node_count > max )
+            max = state_node_count;
+    }
+    
+    return max;
 }
     
 //---------------------------------------------------------------------------------------
