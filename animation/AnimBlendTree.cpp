@@ -142,6 +142,24 @@ void AnimBlendNode::FixAnimationStartTime(float rewind_time_ms)
 }
     
 //---------------------------------------------------------------------------------------
+
+AnimBlendNode* AnimBlendNode::FindNode( StringId factor_name )
+{
+    if( m_factor_name == factor_name )
+        return this;
+    
+    AnimBlendNode* result = nullptr;
+    
+    if( m_left )
+        result = m_left->FindNode( factor_name );
+    
+    if( !result && m_right )
+        result = m_right->FindNode( factor_name );
+    
+    return result;
+}
+    
+//---------------------------------------------------------------------------------------
 }; //namespace Engine
 //---------------------------------------------------------------------------------------
 

@@ -63,6 +63,10 @@ public:
     
     inline void SetType( LayerType::Enum t ) { m_type = t; }
     
+    bool SetNodeFactor( StringId name, float value );
+    
+    bool GetNodeFactor( StringId name, float& value ) const;
+    
     inline float GetBlendFactor() const { return m_blend_factor; }
     
     inline void SetBlendFactor( float f ) { m_blend_factor = f; }

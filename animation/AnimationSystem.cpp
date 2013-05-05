@@ -64,6 +64,7 @@ void AnimationSystem::Update( float delta_ms )
 
 void AnimationSystem::LocalPoseCalculation()
 {
+    // todo: can be easly run in parallel.
     for( u32 i = 0; i < m_controllers.Count(); ++i )
     {
         AnimController& controller = m_controllers[i];
@@ -90,6 +91,7 @@ void AnimationSystem::LocalPoseCalculation()
 
 void AnimationSystem::GlobalPoseCalculation()
 {
+    // todo: can be easly run in parallel.
     for( u32 i = 0; i < m_controllers.Count(); ++i )
     {
         AnimController& controller = m_controllers[i];
@@ -103,6 +105,7 @@ void AnimationSystem::GlobalPoseCalculation()
 
 void AnimationSystem::MatrixPaletteGeneration()
 {
+    // todo: can be easly run in parallel.
     for( u32 i = 0; i < m_controllers.Count(); ++i )
     {
         AnimController& controller = m_controllers[i];

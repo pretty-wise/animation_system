@@ -205,6 +205,43 @@ void AnimLayer::Update( float fDeltaMs )
 }
 
 //---------------------------------------------------------------------------------------
+
+bool AnimLayer::SetNodeFactor( StringId name, float value )
+{
+    if( m_current_tree )
+    {
+        AnimBlendNode* node = m_current_tree->FindNode(name);
+        
+        if( node )
+        {
+            node->SetFactor(value);
+            return true;
+        }
+        
+    }
+    
+    return false;
+}
+
+//---------------------------------------------------------------------------------------
+
+bool AnimLayer::GetNodeFactor( StringId name, float& value ) const
+{
+    if( m_current_tree )
+    {
+        AnimBlendNode* node = m_current_tree->FindNode(name);
+        
+        if( node )
+        {
+            value = node->GetFactor();
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+//---------------------------------------------------------------------------------------
 }; //namespace Engine
 //---------------------------------------------------------------------------------------
 

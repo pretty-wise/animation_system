@@ -36,6 +36,8 @@ public:
     
     inline float GetFactor() const { return m_blend_factor; }
     
+    inline void SetFactor( float value ) { m_blend_factor = value; }
+    
     // returns true if pose has been calculated for this subtree.
     bool GetJointPose( float global_time_ms, s16 joint_idx, AnimationClip::JointPose& pose );
     
@@ -44,6 +46,8 @@ public:
     
     //
     void FixAnimationStartTime( float rewind_time_ms );
+    
+    AnimBlendNode* FindNode( StringId factor_name );
     
 private:
     // left tree node.
